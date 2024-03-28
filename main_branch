@@ -81,12 +81,12 @@ def main():
     
                     st.data_editor(Final_df)
     
-    prepare_CSV = st.button("Generate a CSV file") 
-    if prepare_CSV:
-        with st.spinner('Generating CSV :snowflake:'):
-            Av = df.to_pandas()
-            csv= Av.to_csv()
-            st.download_button("Download CSV",data = csv, mime='text/csv')
+    #prepare_CSV = st.button("Generate a CSV file") 
+    #if prepare_CSV:
+    with st.spinner('Generating CSV :snowflake:'):
+        Av = Final_df.to_pandas()
+        csv= Av.to_csv()
+        st.download_button("Download CSV",data = csv, mime='text/csv')
             
     
 
