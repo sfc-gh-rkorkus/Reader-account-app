@@ -1,0 +1,96 @@
+import streamlit as st
+from snowflake.snowpark.context import get_active_session
+from snowflake.snowpark.functions import table_function
+import snowflake.snowpark.functions as F
+import snowflake.snowpark.types as T
+import pandas as pd
+import fuzzywuzzy as fw
+from fuzzywuzzy import fuzz
+from fuzzywuzzy import process
+
+from snowflake.snowpark import functions as F
+# We can also use Snowpark for our analyses!
+from snowflake.snowpark.context import get_active_session
+session = get_active_session()
+
+# Create a UDF for the matching, if this is hgoing to be used often it is better to do a permanent
+#@F.udf(name="FW_token_set_ratio", is_permanent=True,stage_location= "TEMP.RONK_TEST.READER_TEST", packages=['fuzzywuzzy'], session=session)
+#def String_Ratio(s1: str, s2: str) -> float:
+ #  return fuzz.token_set_ratio(s1, s2)
+
+def DF_to_csv (df):
+    Av = df.to_pandas()
+    csv= Av.to_csv()
+    return csv
+
+def main():
+    st.title('Discover if your AE prospects already use Snowflake through a Reader account')
+
+    Search_by = st.radio("Search for reader accounts with similar names:", ("Search by Account Executive name", "Search by Opportunity Name"))
+    if Search_by == "Search by Account Executive name":
+            df = session.table("FINANCE.CUSTOMER.SUBSCRIPTION")[["SNOWFLAKE_ACCOUNT_ALIAS", "SALESFORCE_ACCOUNT_NAME", "SALESFORCE_ACCOUNT_OWNER_NAME"]].filter(F.col("is_reader_account") == 'true')
+            df3 = session.table("FIVETRAN.SALESFORCE.ACCOUNT")[["ACCOUNT_OWNER_NAME_C"]].filter(F.col("TYPE") == 'Prospect')
+            Owner = st.selectbox("SFDC_Account_Owner:", df3.select("ACCOUNT_OWNER_NAME_C").distinct().order_by(F.col("ACCOUNT_OWNER_NAME_C").try_cast("String")))
+            score = st.slider("Score (default is 75)", 0,100, 75)
+
+            df4 = df.group_by("SNOWFLAKE_ACCOUNT_ALIAS").agg(F.count("SNOWFLAKE_ACCOUNT_ALIAS").alias("X"))
+            df4 = df4.filter(F.col("X") >6).order_by("X", ascending = False)
+
+            df2 = session.table("FIVETRAN.SALESFORCE.ACCOUNT")[["NAME"]].filter((F.col("ACCOUNT_OWNER_NAME_C") == Owner) & (F.col("TYPE") == 'Prospect'))
+            df = df.filter((F.col("SNOWFLAKE_ACCOUNT_ALIAS") != 'null') & (~F.col("SNOWFLAKE_ACCOUNT_ALIAS").in_(df4.select("SNOWFLAKE_ACCOUNT_ALIAS"))) & (~F.col("SNOWFLAKE_ACCOUNT_ALIAS").in_(["FINANCE", "GLOBAL", "BANK", "MARKETING", "SALES", "ANALYTICS","TECH","AUTO","CUSTOMER","TRAINING","NEW", "RESEARCH", "MEDICAL","NETWORK", "HOSTINTERNATIONAL", "STUDIO", "BUSINESS", "REAL", "GROWTH", "CREATOR", "ENGIE", "DEV", "OPTION1", "OPTION2", "OPTION3", "PROTECT", "SALESFORCE", "SANDBOX", "TRIP", "DBTREADER", "FOOD", "INTERN", "ABCREADER", "ART", "PRICING", "RECRUITING", "SHARE", "TABLEAU", "Orders", "GERMANY", "BRANDS", "CHECK", "CORPORATE", "DATA_SCIENCE"])) & (F.length(F.col("SNOWFLAKE_ACCOUNT_ALIAS")) >2))
+
+            st.write('Number of opportunities this AE has:', df2.count())
+            with st.spinner('Calculating... If the chosen AE has more than 500 opps this might take a few minutes, so go grab a cup of coffee :coffee:'): 
+                matching_df = df2.join(df).with_column("score"
+                                                       , F.call_function('FW_token_set_ratio'
+                                                       ,F.col("NAME")
+                                                       , F.col("SNOWFLAKE_ACCOUNT_ALIAS")))
+
+                Final_df = matching_df.filter(F.col("score") >score ).order_by(["NAME", "score"],ascending = [True, False])
+                Final_df = Final_df.dropDuplicates("NAME","SALESFORCE_ACCOUNT_NAME","SALESFORCE_ACCOUNT_OWNER_NAME","SNOWFLAKE_ACCOUNT_ALIAS","SCORE")
+                Final_df = Final_df.with_column_renamed(F.col("NAME"), "Opportunity Name").with_column_renamed(F.col("SNOWFLAKE_ACCOUNT_ALIAS"), "Reader Account Name").with_column_renamed(F.col("SALESFORCE_ACCOUNT_NAME"), "Owning SFDC Account Name").with_column_renamed(F.col("SALESFORCE_ACCOUNT_OWNER_NAME"), "SFDC Account Owner")
+                st.data_editor(Final_df)
+
+    else:
+            df = session.table("FINANCE.CUSTOMER.SUBSCRIPTION")[["SNOWFLAKE_ACCOUNT_ALIAS", "SALESFORCE_ACCOUNT_NAME", "SALESFORCE_ACCOUNT_OWNER_NAME"]].filter(F.col("is_reader_account") == 'true')
+            df3 = session.table("FIVETRAN.SALESFORCE.ACCOUNT")[["NAME"]].filter(F.col("TYPE") == 'Prospect')
+            #st.write(df3.count())
+            option = st.radio("Select an option:", ("Search from the opp list", "Search ''Free-Style''"))
+            if option == "Search from the opp list":
+                opportunity = st.selectbox("SFDC_Account_name:", df3.select("NAME").distinct().order_by(F.col("NAME")).collect())
+            else:
+                opportunity = st.text_input("Prospect name:", "")
+    
+    
+            score = st.slider("Score (default is 75)", 0,100, 75)
+            df4 = df.group_by("SNOWFLAKE_ACCOUNT_ALIAS").agg(F.count("SNOWFLAKE_ACCOUNT_ALIAS").alias("X"))
+            df4 = df4.filter(F.col("X") >6).order_by("X", ascending = False)
+            readers = df.filter((F.col("SNOWFLAKE_ACCOUNT_ALIAS") != 'null') & (~F.col("SNOWFLAKE_ACCOUNT_ALIAS").in_(df4.select("SNOWFLAKE_ACCOUNT_ALIAS"))) & (~F.col("SNOWFLAKE_ACCOUNT_ALIAS").in_(["FINANCE", "GLOBAL", "BANK", "MARKETING", "SALES", "ANALYTICS","TECH","AUTO","CUSTOMER","TRAINING","NEW", "RESEARCH", "MEDICAL","NETWORK", "HOSTINTERNATIONAL", "STUDIO", "BUSINESS", "REAL", "GROWTH", "CREATOR", "ENGIE", "DEV", "OPTION1", "OPTION2", "OPTION3", "PROTECT", "SALESFORCE", "SANDBOX", "TRIP", "DBTREADER", "FOOD", "INTERN", "ABCREADER", "ART", "PRICING", "RECRUITING", "SHARE", "TABLEAU", "Orders", "GERMANY", "BRANDS", "CHECK", "CORPORATE", "DATA_SCIENCE"])) & (F.length(F.col("SNOWFLAKE_ACCOUNT_ALIAS")) >2)).order_by(F.col("SNOWFLAKE_ACCOUNT_ALIAS"))
+            readers = readers.with_column("opp_name", F.lit(opportunity))
+            with st.spinner('Calculating... :snowflake:'):
+                    matching_df = readers.with_column("score"
+                                                       , F.call_function('FW_token_set_ratio'
+                                                       ,F.col("opp_name")
+                                                       , F.col("SNOWFLAKE_ACCOUNT_ALIAS")))
+
+
+                    Final_df = matching_df.filter(F.col("score") >score ).order_by(["opp_name", "score"],ascending = [True, False])
+                    Final_df = Final_df.select("SALESFORCE_ACCOUNT_NAME","SALESFORCE_ACCOUNT_OWNER_NAME","SNOWFLAKE_ACCOUNT_ALIAS","SCORE")
+                    Final_df = Final_df.dropDuplicates("SALESFORCE_ACCOUNT_NAME","SALESFORCE_ACCOUNT_OWNER_NAME","SNOWFLAKE_ACCOUNT_ALIAS","SCORE")
+                    Final_df = Final_df.with_column_renamed(F.col("SNOWFLAKE_ACCOUNT_ALIAS"), "Reader Account Name").with_column_renamed(F.col("SALESFORCE_ACCOUNT_NAME"), "Owning SFDC Account Name").with_column_renamed(F.col("SALESFORCE_ACCOUNT_OWNER_NAME"), "SFDC Account Owner")
+    
+                    st.data_editor(Final_df)
+    
+    prepare_CSV = st.button("Generate a CSV file") 
+    if prepare_CSV:
+        with st.spinner('Generating CSV :snowflake:'):
+            Av = df.to_pandas()
+            csv= Av.to_csv()
+            st.download_button("Download CSV",data = csv, mime='text/csv')
+            
+    
+
+
+# Run the Streamlit app
+if __name__ == '__main__':
+    main()
