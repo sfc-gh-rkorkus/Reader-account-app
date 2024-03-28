@@ -26,7 +26,7 @@ def DF_to_csv (df):
 def main():
     st.title('Discover if your prospects are already using Snowflake through a Reader account :snowflake:')
 
-    Search_by = st.radio("Search for reader accounts with similar names:", ("Search by Account Executive name", "Search by Opportunity Name"))
+    Search_by = st.radio("Search for reader accounts with similar names:", ("Search by Account Owner Name", "Search by Opportunity Name"))
     if Search_by == "Search by Account Owner Name":
             df = session.table("FINANCE.CUSTOMER.SUBSCRIPTION")[["SNOWFLAKE_ACCOUNT_ALIAS", "SALESFORCE_ACCOUNT_NAME", "SALESFORCE_ACCOUNT_OWNER_NAME"]].filter(F.col("is_reader_account") == 'true')
             df3 = session.table("FIVETRAN.SALESFORCE.ACCOUNT")[["ACCOUNT_OWNER_NAME_C"]].filter(F.col("TYPE") == 'Prospect')
@@ -39,7 +39,7 @@ def main():
             df2 = session.table("FIVETRAN.SALESFORCE.ACCOUNT")[["NAME"]].filter((F.col("ACCOUNT_OWNER_NAME_C") == Owner) & (F.col("TYPE") == 'Prospect'))
             df = df.filter((F.col("SNOWFLAKE_ACCOUNT_ALIAS") != 'null') & (~F.col("SNOWFLAKE_ACCOUNT_ALIAS").in_(df4.select("SNOWFLAKE_ACCOUNT_ALIAS"))) & (~F.col("SNOWFLAKE_ACCOUNT_ALIAS").in_(["FINANCE", "GLOBAL", "BANK", "MARKETING", "SALES", "ANALYTICS","TECH","AUTO","CUSTOMER","TRAINING","NEW", "RESEARCH", "MEDICAL","NETWORK", "HOSTINTERNATIONAL", "STUDIO", "BUSINESS", "REAL", "GROWTH", "CREATOR", "ENGIE", "DEV", "OPTION1", "OPTION2", "OPTION3", "PROTECT", "SALESFORCE", "SANDBOX", "TRIP", "DBTREADER", "FOOD", "INTERN", "ABCREADER", "ART", "PRICING", "RECRUITING", "SHARE", "TABLEAU", "Orders", "GERMANY", "BRANDS", "CHECK", "CORPORATE", "DATA_SCIENCE"])) & (F.length(F.col("SNOWFLAKE_ACCOUNT_ALIAS")) >2))
 
-            st.write('Number of opportunities this AE has:', df2.count())
+            st.write('Number of opportunities this Account Owner has:', df2.count())
             with st.spinner('Calculating... If the chosen Account Owner has more than 500 opps this might take a few minutes, so go grab a cup of coffee :coffee:'): 
                 matching_df = df2.join(df).with_column("score"
                                                        , F.call_function('FW_token_set_ratio'
