@@ -21,9 +21,10 @@ session = get_active_session()
 #   return fuzz.token_set_ratio(s1, s2)
 
 def DF_to_csv (df):
-    Av = df.to_pandas()
-    csv= Av.to_csv()
-    return csv
+    with st.spinner('Generating CSV :snowflake:'):
+        Av = df.to_pandas()
+        csv= Av.to_csv()
+        return csv
 
 def main():
     #Logo
@@ -45,8 +46,18 @@ def main():
             df = session.table("FINANCE.CUSTOMER.SUBSCRIPTION")[["SNOWFLAKE_ACCOUNT_ALIAS", "SALESFORCE_ACCOUNT_NAME", "SALESFORCE_ACCOUNT_OWNER_NAME"]].filter(F.col("is_reader_account") == 'true')
             df3 = session.table("FIVETRAN.SALESFORCE.ACCOUNT")[["ACCOUNT_OWNER_NAME_C"]].filter(F.col("TYPE") == 'Prospect')
             Owner = st.selectbox("SFDC_Account_Owner:", df3.select("ACCOUNT_OWNER_NAME_C").distinct().order_by(F.col("ACCOUNT_OWNER_NAME_C").try_cast("String")))
-            st.write('Score of the fuzzy match. If you decrease this value, you may see more results, but the chances of them being correct are lower.')
-            score = st.slider("Score (default=75): ", 0,100, 75)
+            st.write('Select the filtering accuracy. The default is balanced, if you want to see more results choose High Coverage, for better accuracy select High precision')
+            filter_option = st.radio(
+               "",
+                ["High Precision", "Balanced", "High Coverage"],
+                index=1,  # Default selection (Balanced)
+            )
+            if filter_option == "Balanced":
+                score = 75
+            elif filter_option == "High Precision":
+                score = 90
+            else: 
+                score = 50
 
             df4 = df.group_by("SNOWFLAKE_ACCOUNT_ALIAS").agg(F.count("SNOWFLAKE_ACCOUNT_ALIAS").alias("X"))
             df4 = df4.filter(F.col("X") >6).order_by("X", ascending = False)
@@ -78,8 +89,18 @@ def main():
                 opportunity = st.text_input("Prospect name:", "")
     
     
-            st.write('Score of the fuzzy match. If you decrease this value, you may see more results, but the chances of them being correct are lower.')
-            score = st.slider("Score (default=75): ", 0,100, 75)
+            st.write('Select the filtering accuracy. The default is balanced, if you want to see more results choose High Coverage, for better accuracy select High precision')
+            filter_option = st.radio(
+               "",
+                ["High Precision", "Balanced", "High Coverage"],
+                index=1,  # Default selection (Balanced)
+            )
+            if filter_option == "Balanced":
+                score = 75
+            elif filter_option == "High Precision":
+                score = 90
+            else: 
+                score = 50
             df4 = df.group_by("SNOWFLAKE_ACCOUNT_ALIAS").agg(F.count("SNOWFLAKE_ACCOUNT_ALIAS").alias("X"))
             df4 = df4.filter(F.col("X") >6).order_by("X", ascending = False)
             readers = df.filter((F.col("SNOWFLAKE_ACCOUNT_ALIAS") != 'null') & (~F.col("SNOWFLAKE_ACCOUNT_ALIAS").in_(df4.select("SNOWFLAKE_ACCOUNT_ALIAS"))) & (~F.col("SNOWFLAKE_ACCOUNT_ALIAS").in_(["FINANCE", "GLOBAL", "BANK", "MARKETING", "SALES", "ANALYTICS","TECH","AUTO","CUSTOMER","TRAINING","NEW", "RESEARCH", "MEDICAL","NETWORK", "HOSTINTERNATIONAL", "STUDIO", "BUSINESS", "REAL", "GROWTH", "CREATOR", "ENGIE", "DEV", "OPTION1", "OPTION2", "OPTION3", "PROTECT", "SALESFORCE", "SANDBOX", "TRIP", "DBTREADER", "FOOD", "INTERN", "ABCREADER", "ART", "PRICING", "RECRUITING", "SHARE", "TABLEAU", "Orders", "GERMANY", "BRANDS", "CHECK", "CORPORATE", "DATA_SCIENCE"])) & (F.length(F.col("SNOWFLAKE_ACCOUNT_ALIAS")) >2)).order_by(F.col("SNOWFLAKE_ACCOUNT_ALIAS"))
